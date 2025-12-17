@@ -1,0 +1,41 @@
+--- cupy/cupyx/scipy/interpolate/_cubic_old.py	2025-09-19 12:56:21.974532000 +0200
++++ cupy/cupyx/scipy/interpolate/_cubic.py	2025-12-11 14:23:56.506749986 +0100
+@@ -1,6 +1,7 @@
+ 
+ import cupy
+ from cupyx.scipy.interpolate._interpolate import PPoly
++import numpy as np
+ 
+ 
+ def _isscalar(x):
+@@ -383,16 +384,24 @@
+         t = .5 * (m[3:] + m[:-3])
+         # get the denominator of the slope t
+         dm = cupy.abs(cupy.diff(m, axis=0))
+-        f1 = dm[2:]
+-        f2 = dm[:-2]
++        f1 = dm[2:]
++        f2 = dm[:-2]
++        break_mult = 1.e-9
+         f12 = f1 + f2
++
++        # mask to handle m2=m3 case exactly
++        ind = np.nonzero((dm[1:-1] == 0.))
++        x_ind, y_ind = ind[0], ind[1:]
++        t[ind] = m[(x_ind + 1,) + y_ind]
++
+         # These are the mask of where the slope at breakpoint is defined:
+-        max_value = -cupy.inf if y.size == 0 else cupy.max(f12)
+-        ind = cupy.nonzero(f12 > 1e-9 * max_value)
++        ind = cupy.nonzero((dm[1:-1] != 0.) & (f12 > break_mult * dm[1:-1]))
++
+         x_ind, y_ind = ind[0], ind[1:]
+         # Set the slope at breakpoint
+-        t[ind] = (f1[ind] * m[(x_ind + 1,) + y_ind] +
+-                  f2[ind] * m[(x_ind + 2,) + y_ind]) / f12[ind]
++        t[ind] = m[(x_ind + 1,) + y_ind] + (
++                (f2[ind] / f12[ind]) * (
++                    m[(x_ind + 2,) + y_ind] - m[(x_ind + 1,) + y_ind]))
+ 
+         super().__init__(x, y, t, axis=0, extrapolate=False)
+         self.axis = axis
